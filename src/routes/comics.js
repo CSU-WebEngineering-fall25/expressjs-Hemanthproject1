@@ -3,7 +3,7 @@ const router = express.Router();
 const xkcdService = require('../services/xkcdService');
 const { param, query, validationResult } = require('express-validator');
 
-// Validation middleware
+// ✅ Validation middleware
 const validate = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -14,7 +14,7 @@ const validate = (req, res, next) => {
   next();
 };
 
-// GET /api/comics/latest
+// ✅ GET /api/comics/latest
 router.get('/latest', async (req, res, next) => {
   try {
     const comic = await xkcdService.getLatest();
@@ -24,8 +24,9 @@ router.get('/latest', async (req, res, next) => {
   }
 });
 
-// TODO: Implement GET /api/comics/:id
-router.get('/:id',
+// ✅ GET /api/comics/:id
+router.get(
+  '/:id',
   [
     param('id')
       .isInt({ min: 1 })
@@ -34,29 +35,28 @@ router.get('/:id',
   validate,
   async (req, res, next) => {
     try {
-      // Get comic by ID using xkcdService.getById()
-      // Parse req.params.id to integer
-      // Pass any errors to next()
-      res.status(501).json({ error: 'Not implemented' });
+      const id = parseInt(req.params.id, 10);
+      const comic = await xkcdService.getById(id);
+      res.json(comic);
     } catch (error) {
       next(error);
     }
   }
 );
 
-// TODO: Implement GET /api/comics/random
+// ✅ GET /api/comics/random
 router.get('/random', async (req, res, next) => {
   try {
-    // Use xkcdService.getRandom() to get a random comic
-    // Handle any errors appropriately
-    res.status(501).json({ error: 'Not implemented' });
+    const comic = await xkcdService.getRandom();
+    res.json(comic);
   } catch (error) {
     next(error);
   }
 });
 
-// TODO: Implement GET /api/comics/search
-router.get('/search',
+// ✅ GET /api/comics/search
+router.get(
+  '/search',
   [
     query('q')
       .trim()
@@ -74,11 +74,9 @@ router.get('/search',
   validate,
   async (req, res, next) => {
     try {
-      // Extract q, page, limit from req.query
-      // Set defaults: page = 1, limit = 10
-      // Use xkcdService.search(q, page, limit)
-      // Return the search results
-      res.status(501).json({ error: 'Not implemented' });
+      const { q, page = 1, limit = 10 } = req.query;
+      const results = await xkcdService.search(q, Number(page), Number(limit));
+      res.json(results);
     } catch (error) {
       next(error);
     }
