@@ -10,60 +10,92 @@ class XKCDService {
   async getLatest() {
     const cacheKey = 'latest';
     const cached = this.cache.get(cacheKey);
-    
     if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
       return cached.data;
     }
 
-    try {
-      const response = await fetch(`${this.baseUrl}/info.0.json`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const comic = await response.json();
-      const processedComic = this.processComic(comic);
-      
-      this.cache.set(cacheKey, {
-        data: processedComic,
-        timestamp: Date.now()
-      });
-      
-      return processedComic;
-    } catch (error) {
-      throw new Error(`Failed to fetch latest comic: ${error.message}`);
-    }
+    const response = await fetch(`${this.baseUrl}/info.0.json`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+    const comic = await response.json();
+    const processed = this.processComic(comic);
+    this.cache.set(cacheKey, { data: processed, timestamp: Date.now() });
+    return processed;
   }
 
-  // TODO: Implement getById method
+  // ✅ getById
   async getById(id) {
-    // Validate that id is a positive integer
-    // Check cache first using key `comic-${id}`
-    // Fetch from https://xkcd.com/${id}/info.0.json
-    // Handle 404 errors appropriately (throw 'Comic not found')
-    // Handle other HTTP errors
-    // Process and cache the result
-    // Return processed comic
-    throw new Error('getById method not implemented');
+    const n = Number(id);
+    if (!Number.isInteger(n) || n < 1) {
+      throw new Error('Invalid comic ID');
+    }
+
+    const cacheKey = `comic-${n}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+      return cached.data;
+    }
+
+    const resp = await fetch(`${this.baseUrl}/${n}/info.0.json`);
+    if (resp.status === 404) throw new Error('Comic not found');
+    if (!resp.ok) {
+      const e = new Error('Failed to fetch comic');
+      e.isOperational = true;
+      e.statusCode = resp.status;
+      throw e;
+    }
+
+    const data = await resp.json();
+    const comic = this.processComic(data);
+    this.cache.set(cacheKey, { data: comic, timestamp: Date.now() });
+    return comic;
   }
 
-  // TODO: Implement getRandom method
+  // ✅ getRandom
   async getRandom() {
-    // Get the latest comic to know the maximum ID
-    // Generate random number between 1 and latest.id
-    // Use getById to fetch the random comic
-    // Handle any errors appropriately
-    throw new Error('getRandom method not implemented');
+    const latest = await this.getLatest();
+    const maxId = latest.id;
+    const randomId = Math.floor(Math.random() * maxId) + 1;
+    return this.getById(randomId);
   }
 
-  // TODO: Implement search method
+  // ✅ search
   async search(query, page = 1, limit = 10) {
-    // This is a simplified search implementation
-    // Get latest comic to know the range
-    // Calculate offset from page and limit
-    // Search through recent comics (e.g., last 100) for title/transcript matches
-    // Return object with: query, results array, total, pagination object
-    throw new Error('search method not implemented');
+    if (typeof query !== 'string' || query.length < 1 || query.length > 100) {
+      throw new Error('Invalid search query');
+    }
+
+    page = Number(page) || 1;
+    limit = Number(limit) || 10;
+
+    const latest = await this.getLatest();
+    const maxId = latest.id;
+    const startId = Math.max(1, maxId - 100);
+    const q = query.toLowerCase();
+    const matches = [];
+
+    for (let i = maxId; i >= startId; i--) {
+      try {
+        const c = await this.getById(i);
+        const title = (c.title || '').toLowerCase();
+        const transcript = (c.transcript || '').toLowerCase();
+        if (title.includes(q) || transcript.includes(q)) {
+          matches.push(c);
+        }
+      } catch {
+        // skip missing comics
+      }
+    }
+
+    const offset = (page - 1) * limit;
+    const results = matches.slice(offset, offset + limit);
+
+    return {
+      query,
+      results,
+      total: matches.length,
+      pagination: { page, limit }
+    };
   }
 
   processComic(comic) {
